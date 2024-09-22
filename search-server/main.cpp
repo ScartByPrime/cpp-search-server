@@ -63,7 +63,7 @@ public:
         const vector<string> document_parsed = SplitIntoWordsNoStop(document);
         const double inv_word_count = 1.0 / document_parsed.size();
         for (const string& word : document_parsed){
-        word_to_document_freqs_[word][document_id]+= inv_word_count;
+            word_to_document_freqs_[word][document_id]+= inv_word_count;
         }
     }
 
@@ -128,21 +128,21 @@ private:
         map<int, double> document_relevance;
         for (const string& word : query_words) {
             double idf = ComputeWordIDF(word);
-            try {
+            if (word_to_document_freqs_.contains(word)) {
                 for (const auto& [document_id, tf] : word_to_document_freqs_.at(word)) {
                 document_relevance[document_id] += tf * idf;
             }
-            } catch (const out_of_range& e) {
+            } else {
                 continue;
             }
         }
         
         for (const string& minus_word : minus_words) {
-            try {
+            if (word_to_document_freqs_.contains(minus_word)) {
             for (const auto &[document_id, term_freq] : word_to_document_freqs_.at(minus_word)) {
                 document_relevance.erase(document_id);
             }
-            } catch (const out_of_range& e) {
+            } else {
                 continue;
             }
         }
@@ -154,12 +154,12 @@ private:
     }
     
     double ComputeWordIDF(const string& word) const {
-        try {
-    return log(document_count_ * 1.0 / word_to_document_freqs_.at(word).size());
-        } catch (const out_of_range& e) {
+        if (word_to_document_freqs_.contains(word)) {
+            return log(document_count_ * 1.0 / word_to_document_freqs_.at(word).size());
+        } else {
             return 0.0;
         }
-} 
+    } 
 };
 
 SearchServer CreateSearchServer() {
