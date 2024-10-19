@@ -98,15 +98,14 @@ public:
     }
 
     void AddDocument(int document_id, const string& document, DocumentStatus status, const vector<int>& ratings) {
-        if (document_id < 0 || documents_.count(document_id)) {
-            throw invalid_argument("Недопустимое значение индекса"s);
+        if (document_id < 0) {
+            throw invalid_argument("Попытка добавить документ с отрицательным индексом"s);
+        } else if (documents_.count(document_id)) {
+            throw invalid_argument("Индекс добавляемого документа уже присутствует в системе"s);
         }
         const vector<string> words = SplitIntoWordsNoStop(document);
         const double inv_word_count = 1.0 / words.size();
         for (const string& word : words) {
-            if (!IsValidWord(word)) {
-                throw invalid_argument("Одно или несколько слов добавляемого документа содержат недопустимые символы"s);
-            }
             word_to_document_freqs_[word][document_id] += inv_word_count;
         }
         documents_.emplace(document_id, DocumentData{ComputeAverageRating(ratings), status});
@@ -115,11 +114,7 @@ public:
 
     template <typename DocumentPredicate>
     vector<Document> FindTopDocuments(const string& raw_query, DocumentPredicate document_predicate) const  {
-        Query query;
-        if (!ParseQuery(raw_query, query)) {
-            throw invalid_argument("Одно или несколько слов поискового запроса имеют недопустимый формат");
-        }
-
+        Query query = ParseQuery(raw_query);
         auto matched_documents = FindAllDocuments(query, document_predicate);
 
         sort(matched_documents.begin(), matched_documents.end(),
@@ -152,17 +147,14 @@ public:
     }
 
     int GetDocumentId(int index) const {
-     if (index >= 0 && index < document_ids_.size()) {
-        return document_ids_.at(index);
+        if (index >= 0 && index < document_ids_.size()) {
+            return document_ids_.at(index);
         }
         throw out_of_range("Индекс документа выходит за пределы допустимого диапазона"s);
     }
 
     tuple<vector<string>, DocumentStatus> MatchDocument(const string& raw_query, int document_id) const {
-        Query query;
-        if (!ParseQuery(raw_query, query)) {
-            throw invalid_argument("Одно или несколько слов поискового запроса имеют недопустимый формат");
-        }
+        Query query = ParseQuery(raw_query);
         vector<string> matched_words;
         for (const string& word : query.plus_words) {
             if (word_to_document_freqs_.count(word) == 0) {
@@ -201,6 +193,9 @@ private:
     vector<string> SplitIntoWordsNoStop(const string& text) const {
         vector<string> words;
         for (const string& word : SplitIntoWords(text)) {
+            if (!IsValidWord(word)) {
+                throw invalid_argument("Одно или несколько слов добавляемого документа содержат недопустимые символы"s);
+            }
             if (!IsStopWord(word)) {
                 words.push_back(word);
             }
@@ -225,19 +220,19 @@ private:
         bool is_stop;
     };
 
-   [[nodiscard]] bool ParseQueryWord(string text, QueryWord& query_word ) const {
-            if (!IsValidWord(text)) {  // special characters check
-                return false;
-            }
+   QueryWord ParseQueryWord(string text) const {
+        if (!IsValidWord(text)) {
+            throw invalid_argument("Одно или несколько слов поискового запроса содержат недопустимые символы"s);
+        }
         bool is_minus = false;
-        if ((text[0] == '-' && text[1] == '-') || text == "-") {  // double minus and space after minus check
-            return false;
+        // double minus and space after minus check
+        if ((text[0] == '-' && text[1] == '-') || text == "-") {
+            throw invalid_argument("Одно или несколько минус-слов поискового запроса имеет недопустимый формат"s);
         } else if (text[0] == '-') {  
             is_minus = true;
             text = text.substr(1);
         }
-        query_word = {text, is_minus, IsStopWord(text)};
-        return true;
+        return {text, is_minus, IsStopWord(text)};
     }
 
     struct Query {
@@ -245,12 +240,10 @@ private:
         set<string> minus_words;
     };
 
-    [[nodiscard]] bool ParseQuery(const string& text, Query& query) const {
+    Query ParseQuery(const string& text) const {
+        Query query;
         for (const string& word : SplitIntoWords(text)) {
-            QueryWord query_word;
-            if (!ParseQueryWord(word, query_word)) {
-                return false;               
-            }
+        QueryWord query_word = ParseQueryWord(word);
             if (!query_word.is_stop) {
                 if (query_word.is_minus) {
                     query.minus_words.insert(query_word.data);
@@ -259,7 +252,7 @@ private:
                 }
             }
         }
-        return true;
+        return query;
     }
 
     // Existence required
