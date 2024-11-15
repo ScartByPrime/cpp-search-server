@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <numeric>
 #include <tuple>
 
 using namespace std;
@@ -100,11 +101,40 @@ int SearchServer::ComputeAverageRating(const vector<int>& ratings) {
     if (ratings.empty()) {
         return 0;
     }
-    int rating_sum = 0;
-    for (const int rating : ratings) {
-        rating_sum += rating;
-    }
+    int rating_sum = accumulate(ratings.begin(), ratings.end(), 0);
     return rating_sum / static_cast<int>(ratings.size());
+}
+
+SearchServer::QueryWord SearchServer::ParseQueryWord(const string& text) const {
+if (text.empty()) {
+    throw invalid_argument("Query word is empty"s);
+}
+string word = text;
+bool is_minus = false;
+if (word[0] == '-') {
+    is_minus = true;
+    word = word.substr(1);
+}
+if (word.empty() || word[0] == '-' || !IsValidWord(word)) {
+    throw invalid_argument("Query word "s + text + " is invalid");
+}
+
+return {word, is_minus, IsStopWord(word)};
+}
+
+SearchServer::Query SearchServer::ParseQuery(const string& text) const {
+Query result;
+for (const string& word : SplitIntoWords(text)) {
+    const auto query_word = ParseQueryWord(word);
+    if (!query_word.is_stop) {
+        if (query_word.is_minus) {
+            result.minus_words.insert(query_word.data);
+        } else {
+            result.plus_words.insert(query_word.data);
+        }
+    }
+}
+return result;
 }
 
 // Existence required
